@@ -64,6 +64,38 @@ object trans extends App {
       }
   }
 
+  trait Trans2[In1, In2, F] {
+    type To
+    def apply(a: In1, b: In2): To
+  }
+  object Trans2 {
+    type Aux[In1, In2, F, To0] = Trans2[In1, In2, F] { type To = To0 }
+
+    implicit def sliceTrans[From, Slice, To0](
+        implicit canSlice: CanSlice[From, Slice, To0],
+        ev: From <:!< KeyTag[_, _],
+        ev2: To0 =:!= Any): // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
+    Aux[From, Slice, Slice, To0] =
+      new Trans2[From, Slice, Slice] {
+        override type To = To0
+        override def apply(a: From, b: Slice): To = {
+          canSlice(a, b)
+        }
+      }
+
+    implicit def ufuncTrans[In1, In2, F <: UFunc, Ret0](
+        implicit impl: UFunc.UImpl2[F, In1, In2, Ret0],
+        ev: In1 <:!< KeyTag[_, _],
+        ev2: Ret0 =:!= Any): // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
+    Aux[In1, In2, F, Ret0] =
+      new Trans2[In1, In2, F] {
+        override type To = Ret0
+        override def apply(a: In1, b: In2): To = {
+          impl(a, b)
+        }
+      }
+  }
+
   def applyOn[In, F <: UFunc, Ret](v: In, f: F)(
       implicit impl: UFunc.UImpl[f.type, In, Ret]) = {
     f.apply[In, Ret](v)(impl)
@@ -73,21 +105,12 @@ object trans extends App {
 
     def trans[F](f: F)(implicit t: Transformation[A, F]): t.Ret =
       t(v)
+
+    def trans2[F, In2](f: F, b: In2)(implicit t: Trans2[A, In2, F]): t.To =
+      t(v, b)
+
+    def myslice[Slice](s: Slice)(implicit t: Trans2[A, Slice, Slice]): t.To = trans2(s, s)(t)
   }
-
-//  class SliceTrans[From, Slice, D, To <: breeze.linalg.Vector[D]](s: Slice)(
-//      implicit canSlice: CanSlice[From, Slice, To],
-//      cm: ClassTag[D])
-//      extends Transformation[From, Slice] {
-//    override type Ret = DenseVector[D]
-//
-//    override def apply(v: From): DenseVector[D] = canSlice(v, s).toDenseVector
-//  }
-//  implicit def sliceAsTrans[From, Slice, To](s: Slice)(
-//      implicit canSlice: CanSlice[From, Slice, To])
-//    : SliceTrans[From, Slice, To] =
-//    new SliceTrans[From,Slice,To](s)
-
 
   import breeze.linalg._
   import breeze.numerics.log
@@ -128,8 +151,11 @@ object trans extends App {
     .trans(stringify)
 
   println(z("a"))
+  val vec = DenseVector(0, 1, 2, 3)
   println(Add(DenseVector(1, 2), 1))
-
+  println(DenseVector(1,2).trans2(convert, Int).trans2(Add, -1).trans2(convert, Double))
+  convert(convert(DenseVector(1,2), Int), Double)
+  println(vec.myslice(vec <:< 3).trans2(Add, 1))
 //  SimpleApp.book.trans(stringify)
 
   // given a UFunc.Impl2[A,B,C], and a value b: B, create a Transformation[A,F,_]
