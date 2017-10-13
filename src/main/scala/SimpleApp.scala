@@ -8,8 +8,6 @@ import shapeless.ops.record.{Keys, Remover, Selector, Values}
 
 object SimpleApp extends App {
 
-
-
   val book =
     ("author" ->> "Benjamin Pierce") ::
     ("title"  ->> "Types and Programming Languages") ::
@@ -24,9 +22,10 @@ object SimpleApp extends App {
   type Col[Id, T] = FieldType[Id, DenseVector[T]]
 
   case class DF[A <: HList](columns : A = HNil) {
-    def keys(k: Keys[A]) = k()
+    def keys(implicit k: Keys[A]) = k()
 
     def apply(k: Witness)(implicit selector : Selector[A, k.T]): selector.Out = columns.apply(k)
+
 
     def +[T](k: Witness, data: DenseVector[T]) = DF(field[k.T](data) :: columns)
     def +[K,V](c: Col[K,V]) = DF(c :: columns)
@@ -49,11 +48,18 @@ object SimpleApp extends App {
   type _a = z.T
 
   val x = DF() +
-    ("a" ->> DenseVector(1.0, 2.0)) +
-    ("b" ->> DenseVector(4.0, 5.0))
+    ("a" ->> DenseVector(1, 2)) +
+    ("b" ->> DenseVector(4, 5))
 
   val y = x + ("c" ->> x("a") / x("b"))
   println(y)
+
+  import trans._
+  println(x.keys)
+  println(x.trans(stringify))
+
+  val a = DenseVector(1, 2, 3, 1)
+  println(a.apply((a <:< 3) & (a >:> 1)))
 
 
 
