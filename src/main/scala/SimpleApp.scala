@@ -59,7 +59,10 @@ object SimpleApp extends App {
   println(x.trans(stringify))
 
   val a = DenseVector(1, 2, 3, 1)
-  println(a.apply((a <:< 3) & (a >:> 1)))
+  a.apply((a <:< 3))
+//  val t = new SliceTrans[DenseVector[Int], BitVector, DenseVector[Int]](a <:< 3)
+//  println(t)
+//  println(a.trans()
 
 
 
