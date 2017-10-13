@@ -74,8 +74,9 @@ object trans extends App {
     implicit def sliceTrans[From, Slice, To0](
         implicit canSlice: CanSlice[From, Slice, To0],
         ev: From <:!< KeyTag[_, _],
-        ev2: To0 =:!= Any): // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
-    Aux[From, Slice, Slice, To0] =
+        ev2: To0 =:!= Any)
+      : // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
+      Aux[From, Slice, Slice, To0] =
       new Trans2[From, Slice, Slice] {
         override type To = To0
         override def apply(a: From, b: Slice): To = {
@@ -86,14 +87,50 @@ object trans extends App {
     implicit def ufuncTrans[In1, In2, F <: UFunc, Ret0](
         implicit impl: UFunc.UImpl2[F, In1, In2, Ret0],
         ev: In1 <:!< KeyTag[_, _],
-        ev2: Ret0 =:!= Any): // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
-    Aux[In1, In2, F, Ret0] =
+        ev2: Ret0 =:!= Any) // TODO: strangely this is needed, (note: UImpl2 is contravariant in return type)
+      : Aux[In1, In2, F, Ret0] =
       new Trans2[In1, In2, F] {
         override type To = Ret0
         override def apply(a: In1, b: In2): To = {
           impl(a, b)
         }
       }
+
+    /** Specific transformation that maintains the KeyTag */
+    implicit def columnTrans[K, V, In2, F, Ret0](
+        implicit t: Aux[V, In2, F, Ret0]
+    ): Aux[FieldType[K, V], In2, F, FieldType[K, Ret0]] =
+      new Trans2[FieldType[K, V], In2, F] {
+        override type To = FieldType[K, Ret0]
+
+        override def apply(v: FieldType[K, V], b: In2): To =
+          shapeless.labelled.field[K].apply[Ret0](t(v.asInstanceOf[V], b))
+      }
+
+    implicit def hnilTrans[From1 <: HNil, From2, F]: Aux[From1, From2, F, From1] =
+      new Trans2[From1, From2, F] {
+        override type To = From1
+        override def apply(v: From1, b: From2): To = v
+      }
+
+    implicit def hlistTrans[H, T <: HList, From2, F, HRes, TRes <: HList](
+        implicit hTrans: Aux[H, From2, F, HRes],
+        tTrans: Aux[T, From2, F, TRes]
+    ): Aux[H :: T, From2, F, HRes :: TRes] =
+      new Trans2[H :: T, From2, F] {
+        override type To = HRes :: TRes
+
+        override def apply(v: H :: T, b: From2): HRes :: TRes =
+          hTrans(v.head, b) :: tTrans(v.tail, b)
+      }
+
+    implicit def dfTrans[A <: HList, From2, F, Ret0 <: HList](
+        implicit t: Aux[A, From2, F, Ret0]): Aux[DF[A], From2, F, DF[Ret0]] =
+      new Trans2[DF[A], From2, F] {
+        override type To = DF[Ret0]
+        override def apply(v: DF[A], b: From2): To = DF(t(v.columns, b))
+      }
+
   }
 
   def applyOn[In, F <: UFunc, Ret](v: In, f: F)(
@@ -109,7 +146,8 @@ object trans extends App {
     def trans2[F, In2](f: F, b: In2)(implicit t: Trans2[A, In2, F]): t.To =
       t(v, b)
 
-    def myslice[Slice](s: Slice)(implicit t: Trans2[A, Slice, Slice]): t.To = trans2(s, s)(t)
+    def myslice[Slice](s: Slice)(implicit t: Trans2[A, Slice, Slice]): t.To =
+      trans2(s, s)(t)
   }
 
   import breeze.linalg._
@@ -151,11 +189,15 @@ object trans extends App {
     .trans(stringify)
 
   println(z("a"))
-  val vec = DenseVector(0, 1, 2, 3)
+  val vec = DenseVector(0, 1, 2, 3) :: HNil
   println(Add(DenseVector(1, 2), 1))
-  println(DenseVector(1,2).trans2(convert, Int).trans2(Add, -1).trans2(convert, Double))
-  convert(convert(DenseVector(1,2), Int), Double)
-  println(vec.myslice(vec <:< 3).trans2(Add, 1))
+  println(
+    DenseVector(1, 2)
+      .trans2(convert, Int)
+      .trans2(Add, -1)
+      .trans2(convert, Double))
+  convert(convert(DenseVector(1, 2), Int), Double)
+  println(vec.myslice(vec.head >:> 2).trans2(Add, 1))
 //  SimpleApp.book.trans(stringify)
 
   // given a UFunc.Impl2[A,B,C], and a value b: B, create a Transformation[A,F,_]
