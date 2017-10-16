@@ -190,6 +190,10 @@ object trans extends App {
 
   println(z("a"))
   val vec = DenseVector(0, 1, 2, 3) :: HNil
+  val ttt = "true"
+
+  DenseVector(1,2) / DenseVector(2,3)
+
   println(Add(DenseVector(1, 2), 1))
   println(
     DenseVector(1, 2)
