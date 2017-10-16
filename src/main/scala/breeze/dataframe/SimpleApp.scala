@@ -1,3 +1,5 @@
+package breeze.dataframe
+
 import breeze.linalg._
 import shapeless._
 import syntax.singleton._

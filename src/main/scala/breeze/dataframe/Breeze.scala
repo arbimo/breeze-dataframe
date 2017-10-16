@@ -1,3 +1,5 @@
+package breeze.dataframe
+
 import SimpleApp.DF
 import breeze.generic.{MappingUFunc, UFunc}
 import breeze.linalg.DenseVector
